@@ -10,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from bson import ObjectId, _encode_datetime
 from ..models import user_validator, email_validator
 from cerberus import Validator
+from ..auth .auth import logged_in
 
 
 db = dbconfig.getDB()  
@@ -191,6 +192,7 @@ def delete_user(req):
         return HttpResponseServerError({'msg':'We are having troubles now.'})
     
 @csrf_exempt 
+@logged_in
 def show_users(req):
     """MY Users LIST"""
     try:   

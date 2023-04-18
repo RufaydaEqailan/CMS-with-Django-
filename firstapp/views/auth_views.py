@@ -14,12 +14,15 @@ import jwt
 import time
 import hashlib
 import os
+import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv, dotenv_values
 config = dotenv_values(".env")
 load_dotenv()
 
 db = dbconfig.getDB()  
 mycollection_users = db.users
+mycollection_token = db.tokens
 
 @csrf_exempt 
 def login(req):
@@ -43,6 +46,7 @@ def login(req):
             if user:
                 if user['Role']=='admin':
                     if user['users_password']==userPass:
+                        # return JsonResponse({'msg':'ok'})
                         SECRET_KEY = os.getenv('SECRET_KEY')
                         try:
                             payload={}
@@ -51,7 +55,11 @@ def login(req):
                             payload['iss']=os.getenv('ISSUD_BY')
                             payload['role']=user['Role']
                             token=jwt.encode(payload,SECRET_KEY)
-                            return JsonResponse({'Token is ':token})
+                            created_token=mycollection_token.insert_one({'date':datetime.now()+timedelta(hours=-2),'token':token})
+                            if created_token:
+                                return JsonResponse({'Token is ':token})
+                            else:
+                                return JsonResponse({'Token is ':'error'})
                         except:
                             return HttpResponseBadRequest(JsonResponse({'msg':'something  is error'}))
                     else:

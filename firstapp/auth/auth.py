@@ -20,10 +20,20 @@ load_dotenv()
 
 db = dbconfig.getDB()  
 mycollection_users = db.users
+mycollection_token = db.tokens
 
 @csrf_exempt
 def validateToken(token):
-    return True
+    # decode_token=jwt.decode(jwt=token)
+    # return decode_token
+    try:
+        SECRET_KEY = os.getenv('SECRET_KEY')
+        jwt.decode(token, key=SECRET_KEY, algorithms=['HS256'])
+        return True
+    except jwt.ExpiredSignatureError:
+        return False
+    except:
+        return False
 
 @csrf_exempt 
 def logged_in(f):
@@ -34,7 +44,8 @@ def logged_in(f):
             token=token.replace("Bearer ","")
             userAuthenticated=validateToken(token)
             if userAuthenticated:
-                return f(req)
+                 return f(req)
+                # return JsonResponse({'msg':userAuthenticated})
             else:
                 return HttpResponseForbidden({'msg':'You are not login'})
         except:
