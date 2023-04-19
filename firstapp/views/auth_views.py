@@ -1,6 +1,6 @@
 # from django.shortcuts import render
 import json
-from django.http import HttpResponse, JsonResponse, HttpResponseBadRequest, HttpResponseServerError
+from django.http import HttpResponse, JsonResponse, HttpResponseBadRequest, HttpResponseServerError,HttpResponseForbidden
 from django.http.response import JsonResponse
 import dbconfig
 import pdb
@@ -16,6 +16,7 @@ import hashlib
 import os
 import datetime
 from datetime import datetime, timedelta
+from ..auth .auth import logged_in
 from dotenv import load_dotenv, dotenv_values
 config = dotenv_values(".env")
 load_dotenv()
@@ -44,28 +45,30 @@ def login(req):
         user=mycollection_users.find_one(query)
         try:
             if user:
-                if user['Role']=='admin':
+                # if user['Role']=='admin':
                     if user['users_password']==userPass:
                         # return JsonResponse({'msg':'ok'})
                         SECRET_KEY = os.getenv('SECRET_KEY')
                         try:
                             payload={}
                             payload['email']=userEmail
-                            payload['exp']=time.time_ns()+300000
+                            payload['expireAt']=time.time_ns()+300000
                             payload['iss']=os.getenv('ISSUD_BY')
                             payload['role']=user['Role']
                             token=jwt.encode(payload,SECRET_KEY)
-                            created_token=mycollection_token.insert_one({'date':datetime.now()+timedelta(hours=-2),'token':token})
+                            mycollection_token.create_index("expireAt", expireAfterSeconds=300)
+                            expiry_time=datetime.utcnow()+timedelta(seconds=300)
+                            created_token=mycollection_token.insert_one({'date':datetime.now()+timedelta(hours=-2),'token':token, 'expireAt':expiry_time})
                             if created_token:
                                 return JsonResponse({'Token is ':token})
                             else:
                                 return JsonResponse({'Token is ':'error'})
                         except:
-                            return HttpResponseBadRequest(JsonResponse({'msg':'something  is error'}))
+                            return HttpResponseBadRequest(JsonResponse({'msg':'something  is error x'}))
                     else:
                        return HttpResponseBadRequest(JsonResponse({'msg':"The password is not correct"})) 
-                else:
-                    return HttpResponseBadRequest(JsonResponse({'msg':"This user dose not has admin account"}))
+                # else:
+                #     return HttpResponseBadRequest(JsonResponse({'msg':"This user dose not has admin account"}))
             else:
                 return HttpResponseBadRequest(JsonResponse({'msg':'There is no users have this email'}))
         except:
@@ -74,9 +77,25 @@ def login(req):
         return 
  
 
-
-def logout():
+@csrf_exempt
+@logged_in
+def logout(req):
     """"""
+    try:
+        token=""
+        token=req.headers["Authorization"]
+        token=token.replace("Bearer ","")
+        try:
+            deleted_token=mycollection_token.find_one_and_delete({'token':token})
+            if deleted_token:
+                 return JsonResponse({'msg ':'You are logout '}) 
+            else:
+                return False,HttpResponseForbidden[{'msg':'Your token is expire'}]
+        except:
+             return HttpResponseServerError({'msg':'We are having troubles now.'})
+    except:
+        return False,HttpResponseForbidden[{'msg':'Your token is expire'}]
+    
 
 
 @csrf_exempt
@@ -111,8 +130,8 @@ def register(req):
         emailvalidation = email_validator.validate({'users_email': users_email})
         if uservalidation == True:
             if emailvalidation == True:
-                email = hashlib.sha256(users_email.encode()).hexdigest()
-                password = hashlib.sha256(users_password.encode()).hexdigest() 
+                email = hashlib.sha256(users_email.encode()).hexdigest().lower()
+                password = hashlib.sha256(users_password.encode()).hexdigest().lower()
                 try:
                     exist_user=mycollection_users.find_one({'users_email':email})
                     try:

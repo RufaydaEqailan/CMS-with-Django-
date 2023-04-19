@@ -10,7 +10,8 @@ from django.views.decorators.csrf import csrf_exempt
 from bson import ObjectId, _encode_datetime
 from ..models import user_validator, email_validator
 from cerberus import Validator
-from ..auth .auth import logged_in
+import hashlib
+from ..auth .auth import logged_in,is_admin
 
 
 db = dbconfig.getDB()  
@@ -229,6 +230,8 @@ def show_payment_methods(req):
         HttpResponseServerError({'msg':'We are having troubles now.'})
 
 @csrf_exempt 
+@logged_in
+@is_admin
 def add_user(req):
     """Add new user"""
     if req.method=='POST':
@@ -261,10 +264,21 @@ def add_user(req):
         emailvalidation=email_validator.validate({'users_email':users_email})
         if uservalidation==True:
             if emailvalidation==True:
+                email = hashlib.sha256(users_email.encode()).hexdigest().lower()
+                password = hashlib.sha256(users_password.encode()).hexdigest().lower()
                 try:
-                    add_new_user=mycollection_users.insert_one(newuser)
-                    if add_new_user.inserted_id:
-                        return JsonResponse({'msg':f'user with this {users_name} is added successfully.'})
+                    exist_user=mycollection_users.find_one({'users_email':email})
+                    try:
+                        if exist_user:
+                            return HttpResponseBadRequest(JsonResponse({'msg': f'This email {users_email} is already exist.'}))
+                        else:
+                            newuser['users_email']= email
+                            newuser['users_password']= password
+                            add_new_user = mycollection_users.insert_one(newuser)
+                            if add_new_user.inserted_id:
+                                return JsonResponse({'msg': f'user with this {users_email} is added successfully.'})
+                    except:
+                         return JsonResponse({'msg': f'user with this {exist_user} is not found.'})
                 except:
                     return HttpResponseServerError({'msg':'We are having troubles now.'})
             else:
