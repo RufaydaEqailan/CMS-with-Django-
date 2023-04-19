@@ -28,8 +28,15 @@ def validateToken(token):
     # return decode_token
     try:
         SECRET_KEY = os.getenv('SECRET_KEY')
-        jwt.decode(token, key=SECRET_KEY, algorithms=['HS256'])
-        return True
+        payload = jwt.decode(token, key=SECRET_KEY, algorithms=['HS256'])
+        expiration_time = payload['exp']
+        current_time = datetime.datetime.utcnow().timestamp()
+        if current_time > expiration_time:
+            return False
+        if (expiration_time - current_time) <= 300: # 300 seconds = 5 minutes
+            # expiration time is within 5 minutes
+            # you can perform some action here, like sending a warning email
+            return True
     except jwt.ExpiredSignatureError:
         return False
     except:
